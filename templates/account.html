@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="page-title">Account</h1>
+
+<div id="accountContent" style="display:none">
+    <div class="account-grid">
+        <!-- Profile Section -->
+        <div class="account-section">
+            <h3>Profile</h3>
+            <div class="profile-pic-wrap">
+                <img src="/static/profile_pics/default.jpg" alt="Profile" id="profileImg">
+                <div>
+                    <div><strong id="displayUsername"></strong></div>
+                    <div style="font-size:0.85rem;color:#555" id="displayEmail"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="picFile">Change Photo</label>
+                <input type="file" id="picFile" accept="image/*" style="font-family:monospace;font-size:0.82rem">
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+                <button class="btn btn-secondary btn-sm" onclick="uploadPic()">Upload</button>
+                <button class="btn btn-danger btn-sm" onclick="deletePic()">Remove</button>
+            </div>
+
+            <hr style="border:none;border-top:1px solid #e8e8e8;margin:1.25rem 0">
+
+            <h3 style="border:none;padding:0;margin-bottom:1rem">Edit Info</h3>
+            <div class="form-group">
+                <label for="editUsername">Username</label>
+                <input type="text" id="editUsername" maxlength="50">
+            </div>
+            <div class="form-group">
+                <label for="editEmail">Email</label>
+                <input type="email" id="editEmail">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="updateProfile()">Save Changes</button>
+        </div>
+
+        <!-- Password Section -->
+        <div class="account-section">
+            <h3>Change Password</h3>
+            <div class="form-group">
+                <label for="currentPwd">Current Password</label>
+                <input type="password" id="currentPwd" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+                <label for="newPwd">New Password</label>
+                <input type="password" id="newPwd" placeholder="Min 8 characters">
+            </div>
+            <div class="form-group">
+                <label for="confirmPwd">Confirm New</label>
+                <input type="password" id="confirmPwd" placeholder="Repeat new password">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="changePassword()">Update Password</button>
+
+            <hr style="border:none;border-top:1px solid #e8e8e8;margin:1.5rem 0">
+
+            <h3 style="border:none;padding:0;margin-bottom:1rem">Danger Zone</h3>
+            <button class="btn btn-danger btn-sm" onclick="deleteAccount()">Delete Account</button>
+        </div>
+    </div>
+</div>
+
+<div id="loginPrompt" style="display:none">
+    <p>Please <a href="/login">log in</a> to view your account.</p>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentUser = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!isLoggedIn()) {
+        document.getElementById('loginPrompt').style.display = 'block';
+        return;
+    }
+    const res = await apiFetch('/api/users/me');
+    if (!res.ok) { removeToken(); window.location.href = '/login'; return; }
+    currentUser = await res.json();
+    populateForm();
+    document.getElementById('accountContent').style.display = 'block';
+});
+
+function populateForm() {
+    document.getElementById('displayUsername').textContent = currentUser.username;
+    document.getElementById('displayEmail').textContent    = currentUser.email;
+    document.getElementById('editUsername').value          = currentUser.username;
+    document.getElementById('editEmail').value             = currentUser.email;
+    document.getElementById('profileImg').src              = currentUser.image_path;
+}
+
+async function updateProfile() {
+    hideAlert();
+    const username = document.getElementById('editUsername').value.trim();
+    const email    = document.getElementById('editEmail').value.trim();
+    const res = await apiFetch(`/api/users/${currentUser.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ username, email })
+    });
+    if (res.ok) {
+        currentUser = await res.json();
+        populateForm();
+        showAlert('Profile updated.', 'success');
+    } else {
+        const d = await res.json();
+        showAlert(d.detail || 'Update failed.');
+    }
+}
+
+async function changePassword() {
+    hideAlert();
+    const current = document.getElementById('currentPwd').value;
+    const newPwd  = document.getElementById('newPwd').value;
+    const confirm = document.getElementById('confirmPwd').value;
+    if (!current || !newPwd) { showAlert('All fields are required.'); return; }
+    if (newPwd.length < 8) { showAlert('New password must be at least 8 characters.'); return; }
+    if (newPwd !== confirm) { showAlert('Passwords do not match.'); return; }
+
+    const res = await apiFetch('/api/users/me/password', {
+        method: 'PATCH',
+        body: JSON.stringify({ current_password: current, new_password: newPwd })
+    });
+    if (res.ok) {
+        showAlert('Password changed.', 'success');
+        document.getElementById('currentPwd').value = '';
+        document.getElementById('newPwd').value = '';
+        document.getElementById('confirmPwd').value = '';
+    } else {
+        const d = await res.json();
+        showAlert(d.detail || 'Failed to change password.');
+    }
+}
+
+async function uploadPic() {
+    const file = document.getElementById('picFile').files[0];
+    if (!file) { showAlert('Select an image first.'); return; }
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/users/${currentUser.id}/picture`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: form
+    });
+    if (res.ok) {
+        currentUser = await res.json();
+        document.getElementById('profileImg').src = currentUser.image_path;
+        showAlert('Photo updated.', 'success');
+    } else {
+        const d = await res.json();
+        showAlert(d.detail || 'Upload failed.');
+    }
+}
+
+async function deletePic() {
+    if (!confirm('Remove profile photo?')) return;
+    const res = await apiFetch(`/api/users/${currentUser.id}/picture`, { method: 'DELETE' });
+    if (res.ok) {
+        currentUser = await res.json();
+        document.getElementById('profileImg').src = '/static/profile_pics/default.jpg';
+        showAlert('Photo removed.', 'success');
+    } else {
+        const d = await res.json();
+        showAlert(d.detail || 'Failed to remove photo.');
+    }
+}
+
+async function deleteAccount() {
+    if (!confirm('Permanently delete your account? This cannot be undone.')) return;
+    const res = await apiFetch(`/api/users/${currentUser.id}`, { method: 'DELETE' });
+    if (res.ok) {
+        removeToken();
+        window.location.href = '/';
+    } else {
+        const d = await res.json();
+        showAlert(d.detail || 'Failed to delete account.');
+    }
+}
+</script>
+{% endblock %}

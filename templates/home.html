@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="new-post-wrap" id="newPostWrap" style="display:none">
+    <button class="btn btn-primary" onclick="openPostModal()">+ New Post</button>
+</div>
+
+<h1 class="page-title">Recent Posts</h1>
+
+{% if posts %}
+<ul class="post-list" id="postList">
+    {% for post in posts %}
+    <li class="post-card">
+        <h2 class="post-card-title">
+            <a href="/posts/{{ post.id }}">{{ post.title }}</a>
+        </h2>
+        <div class="post-meta">
+            By <a href="/users/{{ post.author.id }}/posts">{{ post.author.username }}</a>
+            &mdash; {{ post.date_posted.strftime('%b %d, %Y') }}
+            &mdash; &#9825; {{ post.likes }}
+        </div>
+        <p class="post-excerpt">{{ post.content }}</p>
+    </li>
+    {% endfor %}
+</ul>
+
+{% if has_more %}
+<div class="load-more-wrap">
+    <button class="btn btn-secondary" id="loadMoreBtn" onclick="loadMore()">Load More</button>
+</div>
+{% endif %}
+
+{% else %}
+<p>No posts yet. Be the first to <a href="/login">log in</a> and write one!</p>
+{% endif %}
+
+<!-- New Post Modal -->
+<div class="modal-overlay" id="postModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>New Post</h3>
+            <button class="modal-close" onclick="closePostModal()">&times;</button>
+        </div>
+        <div class="form-group">
+            <label for="postTitle">Title</label>
+            <input type="text" id="postTitle" maxlength="100" placeholder="Post title">
+        </div>
+        <div class="form-group">
+            <label for="postContent">Content</label>
+            <textarea id="postContent" placeholder="Write your post..."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="submitPost()">Publish</button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSkip = {{ limit }};
+const LIMIT = {{ limit }};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (isLoggedIn()) {
+        document.getElementById('newPostWrap').style.display = 'flex';
+    }
+});
+
+function openPostModal() { document.getElementById('postModal').classList.add('open'); }
+function closePostModal() { document.getElementById('postModal').classList.remove('open'); }
+
+async function submitPost() {
+    const title   = document.getElementById('postTitle').value.trim();
+    const content = document.getElementById('postContent').value.trim();
+    if (!title || !content) { showAlert('Title and content are required.'); return; }
+
+    const res = await apiFetch('/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({ title, content })
+    });
+
+    if (res.ok) {
+        window.location.reload();
+    } else {
+        const data = await res.json();
+        showAlert(data.detail || 'Failed to create post.');
+    }
+}
+
+async function loadMore() {
+    const btn = document.getElementById('loadMoreBtn');
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
+
+    const res = await fetch(`/api/posts?skip=${currentSkip}&limit=${LIMIT}`);
+    const data = await res.json();
+
+    const list = document.getElementById('postList');
+    data.posts.forEach(post => {
+        const li = document.createElement('li');
+        li.className = 'post-card';
+        const d = new Date(post.date_posted);
+        const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        li.innerHTML = `
+            <h2 class="post-card-title"><a href="/posts/${post.id}">${escHtml(post.title)}</a></h2>
+            <div class="post-meta">
+                By <a href="/users/${post.author.id}/posts">${escHtml(post.author.username)}</a>
+                &mdash; ${dateStr} &mdash; &#9825; ${post.likes}
+            </div>
+            <p class="post-excerpt">${escHtml(post.content)}</p>
+        `;
+        list.appendChild(li);
+    });
+
+    currentSkip += data.posts.length;
+    if (!data.has_more) {
+        btn.closest('.load-more-wrap').remove();
+    } else {
+        btn.textContent = 'Load More';
+        btn.disabled = false;
+    }
+}
+
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modal on overlay click
+document.getElementById('postModal').addEventListener('click', function(e) {
+    if (e.target === this) closePostModal();
+});
+</script>
+{% endblock %}

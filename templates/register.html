@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="form-wrap">
+    <h1 class="page-title">Register</h1>
+
+    <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" maxlength="50" placeholder="yourname">
+    </div>
+    <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com">
+    </div>
+    <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Min 8 characters">
+        <p class="form-hint">At least 8 characters.</p>
+    </div>
+    <div class="form-group">
+        <label for="confirm">Confirm Password</label>
+        <input type="password" id="confirm" placeholder="Repeat password">
+    </div>
+
+    <button class="btn btn-primary" onclick="doRegister()" id="regBtn">Create Account</button>
+
+    <div class="form-footer">
+        <p>Already have an account? <a href="/login">Login</a></p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (isLoggedIn()) window.location.href = '/';
+});
+
+async function doRegister() {
+    hideAlert();
+    const username = document.getElementById('username').value.trim();
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const confirm  = document.getElementById('confirm').value;
+
+    if (!username || !email || !password) { showAlert('All fields are required.'); return; }
+    if (password.length < 8) { showAlert('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { showAlert('Passwords do not match.'); return; }
+
+    const btn = document.getElementById('regBtn');
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+
+    const res = await apiFetch('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+    });
+
+    if (res.ok) {
+        // Auto-login
+        const body = new URLSearchParams({ username: email, password });
+        const loginRes = await fetch('/api/users/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        });
+        if (loginRes.ok) {
+            const data = await loginRes.json();
+            setToken(data.access_token);
+        }
+        window.location.href = '/';
+    } else {
+        const data = await res.json();
+        showAlert(data.detail || 'Registration failed.');
+        btn.textContent = 'Create Account';
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

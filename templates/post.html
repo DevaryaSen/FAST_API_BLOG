@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+
+<article>
+    <h1 class="post-full-title">{{ post.title }}</h1>
+
+    <div class="author-box">
+        <img src="{{ post.author.image_path }}" alt="{{ post.author.username }}" class="author-avatar">
+        <div>
+            <div class="author-name">
+                <a href="/users/{{ post.author.id }}/posts">{{ post.author.username }}</a>
+            </div>
+            <div class="post-meta" style="margin:0">
+                {{ post.date_posted.strftime('%B %d, %Y') }} &mdash; &#9825; <span id="likeCount">{{ post.likes }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-full-body">{{ post.content }}</div>
+
+    <div class="post-actions">
+        <button class="btn btn-secondary btn-sm" onclick="likePost({{ post.id }})">&#9825; Like</button>
+        <div id="editActions" style="display:none; gap:0.75rem; display:none">
+            <button class="btn btn-secondary btn-sm" onclick="openEditModal()">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deletePost({{ post.id }})">Delete</button>
+        </div>
+    </div>
+    <p style="margin-top:1rem"><a href="/">&larr; Back to posts</a></p>
+</article>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Edit Post</h3>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="form-group">
+            <label for="editTitle">Title</label>
+            <input type="text" id="editTitle" value="{{ post.title }}" maxlength="100">
+        </div>
+        <div class="form-group">
+            <label for="editContent">Content</label>
+            <textarea id="editContent">{{ post.content }}</textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveEdit({{ post.id }})">Save</button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const POST_AUTHOR_ID = {{ post.author.id }};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (isLoggedIn()) {
+        // check if current user owns this post
+        apiFetch('/api/users/me').then(r => r.ok ? r.json() : null).then(user => {
+            if (user && user.id === POST_AUTHOR_ID) {
+                document.getElementById('editActions').style.display = 'flex';
+            }
+        });
+    }
+});
+
+async function likePost(id) {
+    const res = await apiFetch(`/api/posts/${id}/like`, { method: 'POST' });
+    if (res.ok) {
+        const data = await res.json();
+        document.getElementById('likeCount').textContent = data.likes;
+    } else {
+        showAlert('You must be logged in to like posts.');
+    }
+}
+
+function openEditModal() { document.getElementById('editModal').classList.add('open'); }
+function closeEditModal() { document.getElementById('editModal').classList.remove('open'); }
+
+async function saveEdit(id) {
+    const title   = document.getElementById('editTitle').value.trim();
+    const content = document.getElementById('editContent').value.trim();
+    const res = await apiFetch(`/api/posts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title, content })
+    });
+    if (res.ok) { window.location.reload(); }
+    else { const d = await res.json(); showAlert(d.detail || 'Failed to update.'); }
+}
+
+async function deletePost(id) {
+    if (!confirm('Delete this post?')) return;
+    const res = await apiFetch(`/api/posts/${id}`, { method: 'DELETE' });
+    if (res.ok) { window.location.href = '/'; }
+    else { const d = await res.json(); showAlert(d.detail || 'Failed to delete.'); }
+}
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+</script>
+{% endblock %}

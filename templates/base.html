@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ title }} | Blog{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <a href="/" class="site-logo">Blog</a>
+            <nav class="site-nav" id="siteNav">
+                <a href="/">Home</a>
+                <a href="/login" id="navLogin">Login</a>
+                <a href="/register" id="navRegister">Register</a>
+                <a href="/account" id="navAccount" style="display:none">Account</a>
+                <a href="#" id="navLogout" style="display:none">Logout</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div id="alertBox" class="alert" style="display:none"></div>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; 2026 Blog &mdash; Built with FastAPI</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/auth.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
