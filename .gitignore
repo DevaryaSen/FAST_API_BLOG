@@ -60,4 +60,4 @@ docker-compose.override.yml
 .uv/
 
 # Misc
-.cache/
+.cache/.server.pid
